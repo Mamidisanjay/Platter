@@ -1,0 +1,20 @@
+CREATE TABLE users (
+    id BIGSERIAL PRIMARY KEY,
+    name VARCHAR(120) NOT NULL,
+    email VARCHAR(255) NOT NULL UNIQUE,
+    password_hash VARCHAR(255) NOT NULL,
+    role VARCHAR(32) NOT NULL,
+    enabled BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT users_role_check CHECK (role IN ('CUSTOMER', 'RESTAURANT_OWNER', 'DELIVERY_PARTNER', 'ADMIN'))
+);
+CREATE INDEX idx_users_email ON users(email);
+
+CREATE TABLE refresh_tokens (
+    id BIGSERIAL PRIMARY KEY,
+    token VARCHAR(255) NOT NULL UNIQUE,
+    expires_at TIMESTAMPTZ NOT NULL,
+    user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE
+);
+CREATE INDEX idx_refresh_tokens_user_id ON refresh_tokens(user_id);

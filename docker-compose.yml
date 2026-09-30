@@ -1,0 +1,67 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: platter
+      POSTGRES_USER: platter
+      POSTGRES_PASSWORD: platter
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U platter -d platter"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.15.3
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - ES_JAVA_OPTS=-Xms512m -Xmx512m
+    ports:
+      - "9200:9200"
+    volumes:
+      - elasticsearch-data:/usr/share/elasticsearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fs http://localhost:9200/_cluster/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+
+  backend:
+    build: ./backend
+    environment:
+      DATABASE_URL: jdbc:postgresql://postgres:5432/platter
+      DATABASE_USERNAME: platter
+      DATABASE_PASSWORD: platter
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      ELASTICSEARCH_URL: http://elasticsearch:9200
+      FRONTEND_URL: http://localhost:5173
+      JWT_SECRET: ${JWT_SECRET:-change-me-in-local-env}
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
+
+volumes:
+  postgres-data:
+  elasticsearch-data:

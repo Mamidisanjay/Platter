@@ -1,0 +1,1 @@
+ALTER TABLE payments ADD COLUMN client_secret VARCHAR(255) NOT NULL DEFAULT '';

@@ -31,6 +31,7 @@ public class RestaurantController {
     }
 
     @GetMapping
+    @PreAuthorize("permitAll()")
     public PageResponse<RestaurantResponse> findRestaurants(
             @RequestParam(required = false) String search,
             @RequestParam(required = false) String cuisine,
@@ -40,6 +41,7 @@ public class RestaurantController {
     }
 
     @GetMapping("/{id}")
+    @PreAuthorize("permitAll()")
     public RestaurantResponse findRestaurant(@PathVariable Long id) {
         return restaurantService.findRestaurant(id);
     }

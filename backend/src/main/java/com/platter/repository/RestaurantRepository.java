@@ -8,12 +8,18 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 public interface RestaurantRepository extends JpaRepository<Restaurant, Long> {
-    @Query("""
-            select r from Restaurant r
+    @Query(value = """
+            select * from restaurants r
             where r.available = true
-              and (:search is null or lower(r.name) like lower(concat('%', :search, '%'))
-                   or lower(r.cuisine) like lower(concat('%', :search, '%')))
-              and (:cuisine is null or lower(r.cuisine) like lower(concat('%', :cuisine, '%')))
-            """)
+              and (cast(:search as text) is null or lower(r.name) like lower('%' || cast(:search as text) || '%')
+                   or lower(r.cuisine) like lower('%' || cast(:search as text) || '%'))
+              and (cast(:cuisine as text) is null or lower(r.cuisine) like lower('%' || cast(:cuisine as text) || '%'))
+            """, countQuery = """
+            select count(*) from restaurants r
+            where r.available = true
+              and (cast(:search as text) is null or lower(r.name) like lower('%' || cast(:search as text) || '%')
+                   or lower(r.cuisine) like lower('%' || cast(:search as text) || '%'))
+              and (cast(:cuisine as text) is null or lower(r.cuisine) like lower('%' || cast(:cuisine as text) || '%'))
+            """, nativeQuery = true)
     Page<Restaurant> searchAvailable(@Param("search") String search, @Param("cuisine") String cuisine, Pageable pageable);
 }

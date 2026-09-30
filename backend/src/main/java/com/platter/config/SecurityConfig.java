@@ -12,6 +12,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
+import org.springframework.http.HttpMethod;
 import com.platter.security.JwtAuthenticationFilter;
 
 @Configuration
@@ -40,7 +41,10 @@ public class SecurityConfig {
                 .cors(cors -> {})
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/actuator/health", "/swagger-ui/**", "/v3/api-docs/**", "/api/auth/**", "/api/restaurants", "/api/restaurants/*", "/api/restaurants/*/menu", "/api/menu/*", "/api/categories").permitAll()
+                        .requestMatchers("/actuator/health", "/swagger-ui/**", "/v3/api-docs/**").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/auth/**", "/api/payments/webhook").permitAll()
+                        .requestMatchers("/api/restaurants", "/api/restaurants/**").permitAll()
+                    .requestMatchers(HttpMethod.GET, "/api/restaurants", "/api/restaurants/**", "/api/search", "/api/categories", "/api/menu/**").permitAll()
                         .anyRequest().authenticated())
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
                 .build();

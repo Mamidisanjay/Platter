@@ -4,7 +4,7 @@ services:
     environment:
       POSTGRES_DB: platter
       POSTGRES_USER: platter
-      POSTGRES_PASSWORD: platter
+      POSTGRES_PASSWORD: ${DATABASE_PASSWORD:?DATABASE_PASSWORD must be set}
     ports:
       - "5432:5432"
     volumes:
@@ -51,7 +51,7 @@ services:
       REDIS_PORT: 6379
       ELASTICSEARCH_URL: http://elasticsearch:9200
       FRONTEND_URL: http://localhost:5173
-      JWT_SECRET: ${JWT_SECRET:-change-me-in-local-env}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set}
     ports:
       - "8080:8080"
     depends_on:

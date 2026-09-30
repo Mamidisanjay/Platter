@@ -4,7 +4,7 @@ spring:
   datasource:
     url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/platter}
     username: ${DATABASE_USERNAME:platter}
-    password: ${DATABASE_PASSWORD:platter}
+    password: ${DATABASE_PASSWORD}
   jpa:
     hibernate:
       ddl-auto: validate
@@ -34,7 +34,7 @@ springdoc:
 platter:
   frontend-url: ${FRONTEND_URL:http://127.0.0.1:5173}
   jwt:
-    secret: ${JWT_SECRET:platter-local-development-secret-change-this-before-deployment-2026}
+    secret: ${JWT_SECRET}
     expiration: ${JWT_EXPIRATION:900000}
   stripe:
     secret-key: ${STRIPE_SECRET_KEY:}

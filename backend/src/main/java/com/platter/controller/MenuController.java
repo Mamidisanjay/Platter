@@ -17,6 +17,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.security.access.prepost.PreAuthorize;
 
 @RestController
 public class MenuController {
@@ -37,22 +38,26 @@ public class MenuController {
     }
 
     @PostMapping("/api/restaurants/{restaurantId}/menu")
+    @PreAuthorize("hasAnyRole('ADMIN', 'RESTAURANT_OWNER')")
     public ResponseEntity<MenuItemResponse> create(@PathVariable Long restaurantId, @Valid @RequestBody MenuItemRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(menuService.create(restaurantId, request));
     }
 
     @PutMapping("/api/menu/{id}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'RESTAURANT_OWNER')")
     public MenuItemResponse update(@PathVariable Long id, @Valid @RequestBody MenuItemRequest request) {
         return menuService.update(id, request);
     }
 
     @DeleteMapping("/api/menu/{id}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'RESTAURANT_OWNER')")
     public ResponseEntity<Void> delete(@PathVariable Long id) {
         menuService.delete(id);
         return ResponseEntity.noContent().build();
     }
 
     @PatchMapping("/api/menu/{id}/availability")
+    @PreAuthorize("hasAnyRole('ADMIN', 'RESTAURANT_OWNER')")
     public MenuItemResponse updateAvailability(@PathVariable Long id, @RequestParam boolean available) {
         return menuService.updateAvailability(id, available);
     }

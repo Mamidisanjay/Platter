@@ -1,14 +1,14 @@
 import './style.css'
-import { restaurantService, type RestaurantApiResponse } from './services/api'
+import { restaurantService, type RestaurantApiResponse, type ReviewPage } from './services/api'
 
-type Restaurant = { id: number; name: string; cuisine: string; rating: string; time: string; price: string; image: string; tag: string; accent: string }
+type Restaurant = { id: number; name: string; cuisine: string; rating: string; time: string; price: string; image: string; tag: string; accent: string; reviewCount: number }
 type CartItem = { name: string; price: number; restaurant: string }
 
 let restaurants: Restaurant[] = [
-  { id: 1, name: 'Saffron Street', cuisine: 'North Indian, Biryani', rating: '4.8', time: '28 min', price: '$$', tag: 'Best seller', accent: '#ef6c45', image: 'https://images.unsplash.com/photo-1585937421612-70a008356fbe?auto=format&fit=crop&w=900&q=85' },
-  { id: 2, name: 'Tokyo Table', cuisine: 'Japanese, Ramen', rating: '4.7', time: '34 min', price: '$$$', tag: 'Top rated', accent: '#5878c9', image: 'https://images.unsplash.com/photo-1569718212165-3a8278d5f624?auto=format&fit=crop&w=900&q=85' },
-  { id: 3, name: 'The Green Room', cuisine: 'Healthy, Salads', rating: '4.6', time: '22 min', price: '$$', tag: 'Fresh pick', accent: '#6d9c70', image: 'https://images.unsplash.com/photo-1512621776951-a57141f2eefd?auto=format&fit=crop&w=900&q=85' },
-  { id: 4, name: 'Ember & Grain', cuisine: 'American, Grill', rating: '4.5', time: '41 min', price: '$$$', tag: 'New on Platter', accent: '#b88754', image: 'https://images.unsplash.com/photo-1550547660-d9450f859349?auto=format&fit=crop&w=900&q=85' },
+  { id: 1, name: 'Saffron Street', cuisine: 'North Indian, Biryani', rating: '4.8', time: '28 min', price: '$$', tag: 'Best seller', accent: '#ef6c45', image: 'https://images.unsplash.com/photo-1585937421612-70a008356fbe?auto=format&fit=crop&w=900&q=85', reviewCount: 42 },
+  { id: 2, name: 'Tokyo Table', cuisine: 'Japanese, Ramen', rating: '4.7', time: '34 min', price: '$$$', tag: 'Top rated', accent: '#5878c9', image: 'https://images.unsplash.com/photo-1569718212165-3a8278d5f624?auto=format&fit=crop&w=900&q=85', reviewCount: 31 },
+  { id: 3, name: 'The Green Room', cuisine: 'Healthy, Salads', rating: '4.6', time: '22 min', price: '$$', tag: 'Fresh pick', accent: '#6d9c70', image: 'https://images.unsplash.com/photo-1512621776951-a57141f2eefd?auto=format&fit=crop&w=900&q=85', reviewCount: 28 },
+  { id: 4, name: 'Ember & Grain', cuisine: 'American, Grill', rating: '4.5', time: '41 min', price: '$$$', tag: 'New on Platter', accent: '#b88754', image: 'https://images.unsplash.com/photo-1550547660-d9450f859349?auto=format&fit=crop&w=900&q=85', reviewCount: 19 },
 ]
 
 let activeTab = 'discover'
@@ -16,6 +16,10 @@ let activeFilter = 'All'
 let searchTerm = ''
 let cart: CartItem[] = []
 let orderPlaced = false
+let selectedRestaurant: Restaurant | null = null
+let reviewPage: ReviewPage | null = null
+let reviewLoading = false
+let reviewError = ''
 
 const app = document.querySelector<HTMLDivElement>('#app')!
 const money = (value: number) => `$${value.toFixed(2)}`
@@ -31,6 +35,7 @@ function mapRestaurant(restaurant: RestaurantApiResponse): Restaurant {
     tag: restaurant.tag || 'Popular nearby',
     accent: restaurant.accent || '#ef6c45',
     image: restaurant.imageUrl || '',
+    reviewCount: restaurant.reviewCount || 0,
   }
 }
 
@@ -38,6 +43,7 @@ function render() {
   const filtered = restaurants.filter((restaurant) => `${restaurant.name} ${restaurant.cuisine}`.toLowerCase().includes(searchTerm.toLowerCase()) && (activeFilter === 'All' || restaurant.cuisine.includes(activeFilter)))
   const total = cart.reduce((sum, item) => sum + item.price, 0)
   app.innerHTML = `<div class="shell"><aside class="sidebar"><div class="brand"><span class="brand-mark">p</span><span>platter</span></div><div class="location"><span class="pin">⌖</span><div><small>DELIVERING TO</small><strong>Indiranagar, Bengaluru</strong></div><span>⌄</span></div><nav class="nav-list"><button class="nav-item ${activeTab === 'discover' ? 'active' : ''}" data-tab="discover"><span>⌂</span> Discover</button><button class="nav-item ${activeTab === 'orders' ? 'active' : ''}" data-tab="orders"><span>◷</span> Your orders</button><button class="nav-item ${activeTab === 'favorites' ? 'active' : ''}" data-tab="favorites"><span>♡</span> Favorites</button></nav><div class="sidebar-bottom"><div class="status-dot"></div><div><strong>Everything is fresh</strong><small>We curate the good stuff.</small></div></div><button class="profile"><span class="avatar">AS</span><span><strong>Arjun Sharma</strong><small>Personal account</small></span><span>···</span></button></aside><main class="main-content"><header class="topbar"><div class="mobile-brand"><span class="brand-mark">p</span> platter</div><div class="search-wrap"><span>⌕</span><input id="search" placeholder="Search dishes, restaurants, cuisines" value="${searchTerm}" /></div><button class="icon-btn" title="Notifications">♧<i></i></button><button class="icon-btn admin-toggle" title="Switch to admin view">▦</button></header>${activeTab === 'discover' ? renderDiscover(filtered) : activeTab === 'orders' ? renderOrders() : renderFavorites()}</main>${renderCart(total)}</div>`
+  if (selectedRestaurant) app.insertAdjacentHTML('beforeend', renderReviewPanel())
   bindEvents()
 }
 
@@ -47,7 +53,13 @@ function renderDiscover(filtered: Restaurant[]) {
 }
 
 function renderRestaurant(restaurant: Restaurant) {
-  return `<article class="restaurant-card" style="--card-accent:${restaurant.accent}"><div class="image-wrap"><img src="${restaurant.image}" alt="${restaurant.name}"/><span class="tag">${restaurant.tag}</span><button class="heart" data-favorite="${restaurant.id}">♡</button></div><div class="card-body"><div class="card-title"><h3>${restaurant.name}</h3><span class="rating">★ ${restaurant.rating}</span></div><p>${restaurant.cuisine}</p><div class="card-meta"><span>◷ ${restaurant.time}</span><span>${restaurant.price}</span><button class="quick-add" data-add="${restaurant.id}">+ Add</button></div></div></article>`
+  return `<article class="restaurant-card" style="--card-accent:${restaurant.accent}"><div class="image-wrap"><img src="${restaurant.image}" alt="${restaurant.name}"/><span class="tag">${restaurant.tag}</span><button class="heart" data-favorite="${restaurant.id}">♡</button></div><div class="card-body"><div class="card-title"><h3>${restaurant.name}</h3><button class="rating review-link" data-review="${restaurant.id}">★ ${restaurant.rating} · ${restaurant.reviewCount}</button></div><p>${restaurant.cuisine}</p><div class="card-meta"><span>◷ ${restaurant.time}</span><span>${restaurant.price}</span><button class="quick-add" data-add="${restaurant.id}">+ Add</button></div></div></article>`
+}
+
+function renderReviewPanel() {
+  if (!selectedRestaurant) return ''
+  const reviews = reviewPage?.content || []
+  return `<div class="review-overlay"><section class="review-panel"><button class="review-close" data-close-reviews>×</button><div class="eyebrow">COMMUNITY NOTES <span>✦</span></div><h2>${selectedRestaurant.name}</h2><p class="review-summary"><strong>★ ${reviewPage?.averageRating?.toFixed(1) || selectedRestaurant.rating}</strong> · ${reviewPage?.reviewCount ?? selectedRestaurant.reviewCount} reviews</p>${reviewLoading ? '<div class="review-state">Loading reviews...</div>' : reviewError ? `<div class="review-state error">${reviewError}</div>` : `<div class="review-list">${reviews.length ? reviews.map((review) => `<article class="review-item"><div class="review-item-top"><strong>${review.userName}</strong><span>${'★'.repeat(review.rating)}${'☆'.repeat(5 - review.rating)}</span></div><p>${review.content}</p><small>${new Date(review.createdAt).toLocaleDateString()}</small>${review.ownReview ? `<div class="review-actions"><button data-edit-review="${review.id}">Edit</button><button data-delete-review="${review.id}">Delete</button></div>` : ''}</article>`).join('') : '<div class="review-state">No reviews yet. Be the first to share a note.</div>'}</div>`}<form class="review-form" data-review-form><label>Your rating <span id="rating-value">5</span>/5</label><input name="rating" type="range" min="1" max="5" value="5" /><textarea name="content" maxlength="1000" placeholder="What did you think?" required></textarea><button class="primary-btn" type="submit">Share your review <span>→</span></button></form></section></div>`
 }
 
 function renderOrders() {
@@ -62,6 +74,17 @@ function renderCart(total: number) {
   return `<aside class="cart-panel"><div class="cart-header"><div><span class="eyebrow">YOUR BAG</span><h2>${cart.length ? `${cart.length} ${cart.length === 1 ? 'item' : 'items'}` : 'Ready when you are'}</h2></div><span class="bag-icon">♧</span></div>${cart.length ? `<div class="cart-items">${cart.map((item, index) => `<div class="cart-item"><div class="item-thumb">${item.name.slice(0, 2).toUpperCase()}</div><div><strong>${item.name}</strong><small>${item.restaurant}</small></div><span>${money(item.price)}</span><button data-remove="${index}">×</button></div>`).join('')}</div><div class="cart-total"><span>Subtotal</span><strong>${money(total)}</strong></div><button class="checkout-btn" data-checkout>Checkout <span>→</span></button><small class="secure-note">⌁ Secure checkout · Cashless & simple</small>` : '<div class="cart-empty"><div class="bowl">⌒</div><p>Add something delicious<br>and it will show up here.</p></div><div class="cart-perks"><span>⚡ Fast delivery</span><span>♡ Curated picks</span></div>'}</aside>`
 }
 
+async function openReviews(restaurantId: number) {
+  selectedRestaurant = restaurants.find((restaurant) => restaurant.id === restaurantId) || null
+  reviewPage = null
+  reviewError = ''
+  reviewLoading = true
+  render()
+  try { reviewPage = await restaurantService.reviews(restaurantId) } catch { reviewError = 'Reviews are unavailable right now.' }
+  reviewLoading = false
+  render()
+}
+
 function bindEvents() {
   document.querySelector<HTMLInputElement>('#search')?.addEventListener('input', (event) => { searchTerm = (event.target as HTMLInputElement).value; render() })
   document.querySelectorAll<HTMLElement>('[data-tab]').forEach((element) => element.addEventListener('click', () => { activeTab = element.dataset.tab || 'discover'; render() }))
@@ -70,6 +93,32 @@ function bindEvents() {
   document.querySelectorAll<HTMLElement>('[data-remove]').forEach((element) => element.addEventListener('click', () => { cart.splice(Number(element.dataset.remove), 1); render() }))
   document.querySelector<HTMLElement>('[data-checkout]')?.addEventListener('click', () => { orderPlaced = true; activeTab = 'orders'; cart = []; render() })
   document.querySelector<HTMLElement>('.admin-toggle')?.addEventListener('click', showAdmin)
+  document.querySelectorAll<HTMLElement>('[data-review]').forEach((element) => element.addEventListener('click', () => { void openReviews(Number(element.dataset.review)) }))
+  document.querySelector<HTMLElement>('[data-close-reviews]')?.addEventListener('click', () => { selectedRestaurant = null; reviewPage = null; render() })
+  const ratingInput = document.querySelector<HTMLInputElement>('.review-form input[name="rating"]')
+  ratingInput?.addEventListener('input', () => { const value = document.querySelector<HTMLElement>('#rating-value'); if (value) value.textContent = ratingInput.value })
+  document.querySelector<HTMLFormElement>('[data-review-form]')?.addEventListener('submit', async (event) => {
+    event.preventDefault()
+    if (!selectedRestaurant) return
+    const form = new FormData(event.currentTarget as HTMLFormElement)
+    reviewLoading = true
+    reviewError = ''
+    render()
+    try { await restaurantService.createReview(selectedRestaurant.id, Number(form.get('rating')), String(form.get('content'))); reviewPage = await restaurantService.reviews(selectedRestaurant.id) } catch { reviewError = 'Sign in and complete an order before sharing a review.' }
+    reviewLoading = false
+    render()
+  })
+  document.querySelectorAll<HTMLElement>('[data-delete-review]').forEach((element) => element.addEventListener('click', async () => {
+    try { await restaurantService.deleteReview(Number(element.dataset.deleteReview)); if (selectedRestaurant) reviewPage = await restaurantService.reviews(selectedRestaurant.id); render() } catch { reviewError = 'Unable to delete this review.'; render() }
+  }))
+  document.querySelectorAll<HTMLElement>('[data-edit-review]').forEach((element) => element.addEventListener('click', async () => {
+    const review = reviewPage?.content.find((item) => item.id === Number(element.dataset.editReview))
+    if (!review) return
+    const content = window.prompt('Update your review', review.content)
+    const rating = window.prompt('Rating from 1 to 5', String(review.rating))
+    if (!content || !rating || !selectedRestaurant) return
+    try { await restaurantService.updateReview(review.id, Number(rating), content); reviewPage = await restaurantService.reviews(selectedRestaurant.id); render() } catch { reviewError = 'Unable to update this review.'; render() }
+  }))
 }
 
 function showAdmin() {

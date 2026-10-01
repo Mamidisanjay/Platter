@@ -12,4 +12,5 @@ public record RestaurantResponse(
         String imageUrl,
         String tag,
         String accent,
-        boolean available) { }
+        boolean available,
+        int reviewCount) { }

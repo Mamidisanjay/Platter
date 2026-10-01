@@ -69,7 +69,7 @@ public class RestaurantServiceImpl implements RestaurantService {
     }
 
     private RestaurantResponse toResponse(Restaurant restaurant) {
-        return new RestaurantResponse(restaurant.getId(), restaurant.getName(), restaurant.getCuisine(), restaurant.getRating(), restaurant.getDeliveryTimeMinutes(), restaurant.getPriceTier(), restaurant.getImageUrl(), restaurant.getTag(), restaurant.getAccent(), restaurant.isAvailable());
+        return new RestaurantResponse(restaurant.getId(), restaurant.getName(), restaurant.getCuisine(), restaurant.getRating(), restaurant.getDeliveryTimeMinutes(), restaurant.getPriceTier(), restaurant.getImageUrl(), restaurant.getTag(), restaurant.getAccent(), restaurant.isAvailable(), restaurant.getReviewCount());
     }
 
     private String normalize(String value) {

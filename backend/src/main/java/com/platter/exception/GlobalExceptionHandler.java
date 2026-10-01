@@ -40,6 +40,11 @@ public class GlobalExceptionHandler {
         return error(HttpStatus.FORBIDDEN, "FORBIDDEN", exception.getMessage(), request);
     }
 
+    @ExceptionHandler(GoogleMapsException.class)
+    public ResponseEntity<Map<String, Object>> handleGoogleMaps(GoogleMapsException exception, HttpServletRequest request) {
+        return error(HttpStatus.BAD_GATEWAY, "GOOGLE_MAPS_UNAVAILABLE", exception.getMessage(), request);
+    }
+
     private ResponseEntity<Map<String, Object>> error(HttpStatus status, String error, String message, HttpServletRequest request) {
         return ResponseEntity.status(status).body(Map.of(
                 "timestamp", Instant.now().toString(),

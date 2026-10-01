@@ -60,6 +60,16 @@ public class DeliveryService {
     }
 
     @Transactional(readOnly = true)
+    public Delivery getEntityByOrder(UserDetails details, Long orderId) {
+        Delivery delivery = findByOrder(orderId);
+        boolean admin = details.getAuthorities().stream().anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"));
+        boolean partner = delivery.getDeliveryPartner().getEmail().equalsIgnoreCase(details.getUsername());
+        boolean customer = delivery.getOrder().getUser().getEmail().equalsIgnoreCase(details.getUsername());
+        if (!admin && !partner && !customer) throw new ForbiddenException("You cannot access this delivery");
+        return delivery;
+    }
+
+    @Transactional(readOnly = true)
     public List<DeliveryResponse> findForPartner(UserDetails details) { return deliveryRepository.findByDeliveryPartnerEmailIgnoreCaseOrderByCreatedAtDesc(details.getUsername()).stream().map(this::toResponse).toList(); }
     @Transactional(readOnly = true)
     public List<DeliveryResponse> findAll() { return deliveryRepository.findAllByOrderByCreatedAtDesc().stream().map(this::toResponse).toList(); }

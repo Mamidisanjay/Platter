@@ -47,3 +47,7 @@ platter:
   rate-limit:
     capacity: ${PLATTER_RATE_LIMIT_CAPACITY:60}
     window-seconds: ${PLATTER_RATE_LIMIT_WINDOW_SECONDS:60}
+  google-maps:
+    api-key: ${GOOGLE_MAPS_API_KEY:}
+    base-url: ${GOOGLE_MAPS_BASE_URL:https://maps.googleapis.com}
+    timeout-seconds: ${GOOGLE_MAPS_TIMEOUT_SECONDS:5}

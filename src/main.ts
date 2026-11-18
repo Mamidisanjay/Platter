@@ -1,5 +1,5 @@
 import './style.css'
-import { restaurantService, type RestaurantApiResponse, type ReviewPage } from './services/api'
+import { adminService, deliveryService, restaurantService, type AdminPayment, type AdminUser, type AuditLog, type Delivery, type RestaurantApiResponse, type Review, type ReviewPage } from './services/api'
 
 type Restaurant = { id: number; name: string; cuisine: string; rating: string; time: string; price: string; image: string; tag: string; accent: string; reviewCount: number }
 type CartItem = { name: string; price: number; restaurant: string }
@@ -24,6 +24,17 @@ let reviewError = ''
 const app = document.querySelector<HTMLDivElement>('#app')!
 const money = (value: number) => `$${value.toFixed(2)}`
 
+function currentRole(): string | null {
+  const token = localStorage.getItem('platter_access_token')
+  if (!token) return null
+  try { return JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/'))).role || null } catch { return null }
+}
+
+function accessDenied(requiredRole: string) {
+  app.innerHTML = `<div class="admin-shell"><main class="admin-main"><div class="collection-placeholder"><span>◌</span><h2>Restricted area</h2><p>Sign in with a ${requiredRole} account to continue.</p><button class="primary-btn" data-tab="discover">Back to Platter <span>→</span></button></div></main></div>`
+  bindEvents()
+}
+
 function mapRestaurant(restaurant: RestaurantApiResponse): Restaurant {
   return {
     id: restaurant.id,
@@ -44,6 +55,9 @@ function render() {
   const total = cart.reduce((sum, item) => sum + item.price, 0)
   app.innerHTML = `<div class="shell"><aside class="sidebar"><div class="brand"><span class="brand-mark">p</span><span>platter</span></div><div class="location"><span class="pin">⌖</span><div><small>DELIVERING TO</small><strong>Indiranagar, Bengaluru</strong></div><span>⌄</span></div><nav class="nav-list"><button class="nav-item ${activeTab === 'discover' ? 'active' : ''}" data-tab="discover"><span>⌂</span> Discover</button><button class="nav-item ${activeTab === 'orders' ? 'active' : ''}" data-tab="orders"><span>◷</span> Your orders</button><button class="nav-item ${activeTab === 'favorites' ? 'active' : ''}" data-tab="favorites"><span>♡</span> Favorites</button></nav><div class="sidebar-bottom"><div class="status-dot"></div><div><strong>Everything is fresh</strong><small>We curate the good stuff.</small></div></div><button class="profile"><span class="avatar">AS</span><span><strong>Arjun Sharma</strong><small>Personal account</small></span><span>···</span></button></aside><main class="main-content"><header class="topbar"><div class="mobile-brand"><span class="brand-mark">p</span> platter</div><div class="search-wrap"><span>⌕</span><input id="search" placeholder="Search dishes, restaurants, cuisines" value="${searchTerm}" /></div><button class="icon-btn" title="Notifications">♧<i></i></button><button class="icon-btn admin-toggle" title="Switch to admin view">▦</button></header>${activeTab === 'discover' ? renderDiscover(filtered) : activeTab === 'orders' ? renderOrders() : renderFavorites()}</main>${renderCart(total)}</div>`
   if (selectedRestaurant) app.insertAdjacentHTML('beforeend', renderReviewPanel())
+  const role = currentRole()
+  if (role === 'ADMIN') document.querySelector('.topbar')?.insertAdjacentHTML('beforeend', '<button class="icon-btn role-view" data-admin-view title="Admin dashboard">▦</button>')
+  if (role === 'DELIVERY_PARTNER') document.querySelector('.topbar')?.insertAdjacentHTML('beforeend', '<button class="icon-btn role-view" data-delivery-view title="Delivery dashboard">⌁</button>')
   bindEvents()
 }
 
@@ -93,6 +107,8 @@ function bindEvents() {
   document.querySelectorAll<HTMLElement>('[data-remove]').forEach((element) => element.addEventListener('click', () => { cart.splice(Number(element.dataset.remove), 1); render() }))
   document.querySelector<HTMLElement>('[data-checkout]')?.addEventListener('click', () => { orderPlaced = true; activeTab = 'orders'; cart = []; render() })
   document.querySelector<HTMLElement>('.admin-toggle')?.addEventListener('click', showAdmin)
+  document.querySelector<HTMLElement>('[data-admin-view]')?.addEventListener('click', showAdmin)
+  document.querySelector<HTMLElement>('[data-delivery-view]')?.addEventListener('click', showDelivery)
   document.querySelectorAll<HTMLElement>('[data-review]').forEach((element) => element.addEventListener('click', () => { void openReviews(Number(element.dataset.review)) }))
   document.querySelector<HTMLElement>('[data-close-reviews]')?.addEventListener('click', () => { selectedRestaurant = null; reviewPage = null; render() })
   const ratingInput = document.querySelector<HTMLInputElement>('.review-form input[name="rating"]')
@@ -121,9 +137,44 @@ function bindEvents() {
   }))
 }
 
-function showAdmin() {
+function showAdminLegacy() {
   app.innerHTML = `<div class="admin-shell"><header class="admin-top"><div class="brand"><span class="brand-mark">p</span><span>platter <small>OPS</small></span></div><div class="admin-user"><span class="status-dot"></span> All systems operational <span class="avatar">AS</span></div></header><main class="admin-main"><div class="admin-heading"><div><span class="eyebrow">OPERATIONS CENTER <span>✦</span></span><h1>Good morning, <em>Arjun.</em></h1><p>Here is what is happening across Platter today.</p></div><button class="back-btn" id="back-to-app">← Back to app</button></div><div class="stat-grid"><div class="stat-card"><span>ORDERS TODAY</span><strong>1,284</strong><small class="up">↗ 12.8% <i>vs yesterday</i></small></div><div class="stat-card"><span>GROSS SALES</span><strong>$38,420</strong><small class="up">↗ 8.4% <i>vs yesterday</i></small></div><div class="stat-card"><span>AVG. DELIVERY</span><strong>31 <small>min</small></strong><small class="down">↘ 4 min <i>faster this week</i></small></div><div class="stat-card"><span>ACTIVE PROMOS</span><strong>06</strong><small class="neutral">● 2 ending today</small></div></div><div class="admin-columns"><section class="panel"><div class="panel-heading"><div><h2>Live order flow</h2><p>Real-time order activity</p></div><span class="live-pill"><i></i> LIVE</span></div><div class="flow-chart"><div class="chart-labels"><span>1.2k</span><span>900</span><span>600</span><span>300</span><span>0</span></div><div class="chart-lines"></div><svg viewBox="0 0 700 180" preserveAspectRatio="none"><path d="M0,145 C40,135 60,146 95,118 S145,125 180,105 S225,110 260,82 S310,92 345,95 S385,56 430,72 S470,88 505,50 S540,72 580,38 S630,52 700,18"/><path class="area" d="M0,145 C40,135 60,146 95,118 S145,125 180,105 S225,110 260,82 S310,92 345,95 S385,56 430,72 S470,88 505,50 S540,72 580,38 S630,52 700,18 L700,180 L0,180 Z"/></svg></div><div class="chart-days"><span>10 AM</span><span>12 PM</span><span>2 PM</span><span>4 PM</span><span>6 PM</span><span>8 PM</span></div></section><section class="panel promo-panel"><div class="panel-heading"><div><h2>Promo health</h2><p>Campaign performance</p></div><button class="dots">···</button></div><div class="promo-row"><span class="promo-code">FIRSTBITE</span><div><strong>72% redeemed</strong><small>1,240 uses · 6 days left</small></div><span class="promo-dot green"></span></div><div class="promo-row"><span class="promo-code orange">WEEKEND20</span><div><strong>48% redeemed</strong><small>842 uses · 2 days left</small></div><span class="promo-dot yellow"></span></div><div class="promo-row"><span class="promo-code blue">WELCOME</span><div><strong>31% redeemed</strong><small>420 uses · 12 days left</small></div><span class="promo-dot blue-dot"></span></div><button class="manage-btn">Manage promotions <span>→</span></button></section></div></main></div>`
   document.querySelector('#back-to-app')?.addEventListener('click', render)
+}
+
+function escapeHtml(value: unknown) { return String(value ?? '').replace(/[&<>'"]/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[character] || character)) }
+
+function adminTable(title: string, content: string) { return `<section class="panel admin-data-panel"><div class="panel-heading"><div><h2>${title}</h2><p>Live data from Platter</p></div></div>${content || '<div class="review-state">No records available.</div>'}</section>` }
+
+async function showAdmin() {
+  if (currentRole() !== 'ADMIN') { accessDenied('ADMIN'); return }
+  app.innerHTML = '<div class="admin-shell"><main class="admin-main"><div class="admin-heading"><div><span class="eyebrow">OPERATIONS CENTER <span>✦</span></span><h1>Platter <em>control.</em></h1><p>Live operational data from the platform.</p></div><button class="back-btn" id="back-to-app">← Back to app</button></div><div class="review-state">Loading admin data...</div></main></div>'
+  document.querySelector('#back-to-app')?.addEventListener('click', render)
+  try {
+    const [dashboard, users, restaurantsData, orders, payments, audits, reviews, deliveries] = await Promise.all([adminService.dashboard(), adminService.users(), adminService.restaurants(), adminService.orders(), adminService.payments(), adminService.audits(), adminService.reviews(), adminService.deliveries()])
+    const stats = `<div class="stat-grid"><div class="stat-card"><span>ORDERS TODAY</span><strong>${dashboard.ordersToday}</strong></div><div class="stat-card"><span>GROSS SALES</span><strong>${money(dashboard.grossSales)}</strong></div><div class="stat-card"><span>AVG. DELIVERY</span><strong>${dashboard.averageDeliveryTimeMinutes} <small>min</small></strong></div><div class="stat-card"><span>ACTIVE PROMOS</span><strong>${dashboard.activePromotions}</strong></div></div>`
+    const sections = `<div class="admin-columns"><div class="admin-column-stack">${adminTable('Users', users.map((user: AdminUser) => `<div class="admin-row"><strong>${escapeHtml(user.name)}</strong><span>${escapeHtml(user.email)}</span><span class="status-badge">${escapeHtml(user.role)}</span></div>`).join(''))}${adminTable('Restaurants', restaurantsData.map((item) => `<div class="admin-row"><strong>${escapeHtml(item.name)}</strong><span>${escapeHtml(item.cuisine)}</span><span>★ ${item.rating.toFixed(1)}</span></div>`).join(''))}${adminTable('Payments', payments.map((payment: AdminPayment) => `<div class="admin-row"><strong>#${payment.id}</strong><span>Order #${payment.orderId}</span><span>${money(payment.amount)} · ${escapeHtml(payment.status)}</span></div>`).join(''))}</div><div class="admin-column-stack">${adminTable('Orders', orders.map((order: any) => `<div class="admin-row"><strong>#${order.id}</strong><span>${escapeHtml(order.restaurant)}</span><span>${money(order.total)} · ${escapeHtml(order.status)}</span></div>`).join(''))}${adminTable('Deliveries', deliveries.map((delivery: Delivery) => `<div class="admin-row"><strong>Order #${delivery.orderId}</strong><span>${escapeHtml(delivery.deliveryAddress)}</span><span>${escapeHtml(delivery.status)}</span></div>`).join(''))}${adminTable('Reviews', reviews.map((review: Review) => `<div class="admin-row"><strong>${escapeHtml(review.userName)}</strong><span>${'★'.repeat(review.rating)}</span><span>${escapeHtml(review.content)}</span></div>`).join(''))}</div></div>${adminTable('Audit activity', audits.map((audit: AuditLog) => `<div class="admin-row"><strong>${escapeHtml(audit.action)}</strong><span>${escapeHtml(audit.entityType)} #${audit.entityId ?? ''}</span><span>${new Date(audit.timestamp).toLocaleString()}</span></div>`).join(''))}`
+    app.innerHTML = `<div class="admin-shell"><header class="admin-top"><div class="brand"><span class="brand-mark">p</span><span>platter <small>OPS</small></span></div><div class="admin-user"><span class="status-dot"></span> Live platform data <span class="avatar">AS</span></div></header><main class="admin-main"><div class="admin-heading"><div><span class="eyebrow">OPERATIONS CENTER <span>✦</span></span><h1>Platter <em>control.</em></h1><p>Live operational data from the platform.</p></div><button class="back-btn" id="back-to-app">← Back to app</button></div>${stats}${sections}</main></div>`
+    document.querySelector('#back-to-app')?.addEventListener('click', render)
+  } catch { app.innerHTML = '<div class="admin-shell"><main class="admin-main"><div class="review-state error">Admin data could not be loaded. Check your access and retry.</div><button class="primary-btn" id="retry-admin">Retry <span>↻</span></button></main></div>'; document.querySelector('#retry-admin')?.addEventListener('click', () => void showAdmin()) }
+}
+
+function deliveryTransitions(status: string) { return ({ ASSIGNED: ['PICKED_UP', 'CANCELLED'], PICKED_UP: ['OUT_FOR_DELIVERY', 'CANCELLED'], OUT_FOR_DELIVERY: ['DELIVERED', 'CANCELLED'] } as Record<string, string[]>)[status] || [] }
+
+async function showDelivery() {
+  if (currentRole() !== 'DELIVERY_PARTNER') { accessDenied('DELIVERY_PARTNER'); return }
+  app.innerHTML = '<div class="admin-shell"><main class="admin-main"><div class="admin-heading"><div><span class="eyebrow">DELIVERY DESK <span>✦</span></span><h1>Your <em>routes.</em></h1><p>Assigned deliveries from the platform.</p></div><button class="back-btn" id="back-to-app">← Back to app</button></div><div class="review-state">Loading deliveries...</div></main></div>'
+  document.querySelector('#back-to-app')?.addEventListener('click', render)
+  try {
+    const deliveries = await deliveryService.list()
+    const cards = deliveries.map((delivery: Delivery) => `<article class="delivery-card"><div><span class="eyebrow">ORDER #${delivery.orderId}</span><h2>${escapeHtml(delivery.deliveryAddress)}</h2><p>${escapeHtml(delivery.status)} · ${new Date(delivery.createdAt).toLocaleString()}</p>${delivery.latitude != null ? `<small>Location ${delivery.latitude.toFixed(4)}, ${delivery.longitude?.toFixed(4)}</small>` : ''}</div><div class="delivery-actions"><button class="quick-add" data-accept-delivery="${delivery.id}" ${delivery.status !== 'ASSIGNED' ? 'disabled' : ''}>Accept</button><select data-delivery-status="${delivery.id}"><option value="">Update status</option>${deliveryTransitions(delivery.status).map((status) => `<option value="${status}">${status}</option>`).join('')}</select><input data-latitude="${delivery.id}" placeholder="Latitude" type="number" step="any"/><input data-longitude="${delivery.id}" placeholder="Longitude" type="number" step="any"/><button class="quick-add" data-location-delivery="${delivery.id}">Update location</button></div></article>`).join('')
+    app.innerHTML = `<div class="admin-shell"><header class="admin-top"><div class="brand"><span class="brand-mark">p</span><span>platter <small>DELIVERY</small></span></div><button class="back-btn" id="back-to-app">← Back to app</button></header><main class="admin-main"><div class="admin-heading"><div><span class="eyebrow">DELIVERY DESK <span>✦</span></span><h1>Your <em>routes.</em></h1><p>Assigned deliveries from the platform.</p></div><button class="back-btn" id="refresh-delivery">Refresh</button></div>${cards || '<div class="review-state">No assigned deliveries.</div>'}</main></div>`
+    document.querySelector('#back-to-app')?.addEventListener('click', render)
+    document.querySelector('#refresh-delivery')?.addEventListener('click', () => void showDelivery())
+    document.querySelectorAll<HTMLElement>('[data-accept-delivery]').forEach((element) => element.addEventListener('click', async () => { try { await deliveryService.accept(Number(element.dataset.acceptDelivery)); await showDelivery() } catch { window.alert('Unable to accept this delivery.') } }))
+    document.querySelectorAll<HTMLSelectElement>('[data-delivery-status]').forEach((element) => element.addEventListener('change', async () => { if (!element.value) return; try { await deliveryService.updateStatus(Number(element.dataset.deliveryStatus), element.value); await showDelivery() } catch { window.alert('That delivery status transition was rejected.') } }))
+    document.querySelectorAll<HTMLElement>('[data-location-delivery]').forEach((element) => element.addEventListener('click', async () => { const id = Number(element.dataset.locationDelivery); const latitude = Number(document.querySelector<HTMLInputElement>(`[data-latitude="${id}"]`)?.value); const longitude = Number(document.querySelector<HTMLInputElement>(`[data-longitude="${id}"]`)?.value); try { await deliveryService.updateLocation(id, latitude, longitude); await showDelivery() } catch { window.alert('Unable to update delivery location.') } }))
+  } catch { app.innerHTML = '<div class="admin-shell"><main class="admin-main"><div class="review-state error">Deliveries could not be loaded. Check your access and retry.</div><button class="primary-btn" id="retry-delivery">Retry <span>↻</span></button></main></div>'; document.querySelector('#retry-delivery')?.addEventListener('click', () => void showDelivery()) }
 }
 
 async function initialize() {
@@ -136,4 +187,5 @@ async function initialize() {
   render()
 }
 
+void showAdminLegacy
 void initialize()

@@ -22,6 +22,40 @@ export type AdminPayment = { id: number; orderId: number; amount: number; status
 export type AuditLog = { id: number; userId: number | null; action: string; entityType: string; entityId: number | null; timestamp: string; ipAddress: string | null; metadata: string | null }
 export type Delivery = { id: number; orderId: number; deliveryPartnerId: number; deliveryPartnerName: string; status: string; pickupTime: string; pickedUpAt: string | null; deliveredAt: string | null; deliveryAddress: string; latitude: number | null; longitude: number | null; createdAt: string; updatedAt: string }
 
+export type Order = {
+  id: number
+  restaurant: string
+  status: string
+  subtotal: number
+  discount: number
+  tax: number
+  deliveryFee: number
+  total: number
+  createdAt: string
+  items: unknown[]
+}
+
+export type PaymentIntentResponse = {
+  paymentId: number
+  orderId: number
+  clientSecret: string
+  amount: number
+  status: string
+}
+
+export type DeliveryRoute = {
+  origin: string
+  destination: string
+  distanceText: string
+  distanceMeters: number
+  durationText: string
+  durationSeconds: number
+  originLatitude: number
+  originLongitude: number
+  destinationLatitude: number
+  destinationLongitude: number
+}
+
 type PageResponse<T> = { content: T[] }
 
 const api = axios.create({
@@ -75,6 +109,24 @@ export const deliveryService = {
   accept: async (id: number) => (await api.post<Delivery>(`/delivery/orders/${id}/accept`)).data,
   updateStatus: async (id: number, status: string) => (await api.patch<Delivery>(`/delivery/orders/${id}/status`, { status })).data,
   updateLocation: async (id: number, latitude: number, longitude: number) => (await api.patch<Delivery>(`/delivery/orders/${id}/location`, { latitude, longitude })).data,
+}
+
+export const orderService = {
+  create: async (idempotencyKey?: string) => {
+    const headers = idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : undefined
+    return (await api.post<Order>('/orders', {}, { headers })).data
+  },
+}
+
+export const paymentService = {
+  create: async (orderId: number, idempotencyKey?: string) => {
+    const headers = idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : undefined
+    return (await api.post<PaymentIntentResponse>('/payments/create', { orderId }, { headers })).data
+  },
+}
+
+export const deliveryRouteService = {
+  get: async (orderId: number) => (await api.get<DeliveryRoute>(`/orders/${orderId}/delivery/route`)).data,
 }
 
 export default api

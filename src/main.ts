@@ -1,5 +1,5 @@
 import './style.css'
-import { adminService, deliveryService, restaurantService, type AdminPayment, type AdminUser, type AuditLog, type Delivery, type RestaurantApiResponse, type Review, type ReviewPage } from './services/api'
+import { adminService, deliveryRouteService, deliveryService, orderService, paymentService, restaurantService, type AdminPayment, type AdminUser, type AuditLog, type Delivery, type RestaurantApiResponse, type Review, type ReviewPage } from './services/api'
 
 type Restaurant = { id: number; name: string; cuisine: string; rating: string; time: string; price: string; image: string; tag: string; accent: string; reviewCount: number }
 type CartItem = { name: string; price: number; restaurant: string }
@@ -105,7 +105,35 @@ function bindEvents() {
   document.querySelectorAll<HTMLElement>('[data-filter]').forEach((element) => element.addEventListener('click', () => { activeFilter = element.dataset.filter || 'All'; render() }))
   document.querySelectorAll<HTMLElement>('[data-add]').forEach((element) => element.addEventListener('click', () => { const restaurant = restaurants.find((item) => item.id === Number(element.dataset.add)); if (restaurant) { cart.push({ name: restaurant.id === 1 ? 'Butter chicken bowl' : `${restaurant.name} special`, price: restaurant.id === 1 ? 18.5 : 16, restaurant: restaurant.name }); render() } }))
   document.querySelectorAll<HTMLElement>('[data-remove]').forEach((element) => element.addEventListener('click', () => { cart.splice(Number(element.dataset.remove), 1); render() }))
-  document.querySelector<HTMLElement>('[data-checkout]')?.addEventListener('click', () => { orderPlaced = true; activeTab = 'orders'; cart = []; render() })
+  document.querySelector<HTMLElement>('[data-checkout]')?.addEventListener('click', async () => {
+    if (!localStorage.getItem('platter_access_token')) {
+      window.alert('Sign in before placing an order.')
+      return
+    }
+    const checkoutButton = document.querySelector<HTMLElement>('[data-checkout]')
+    if (checkoutButton) checkoutButton.textContent = 'Creating order…'
+    try {
+      const idempotencyKey = `checkout-${crypto.randomUUID()}`
+      const order = await orderService.create(idempotencyKey)
+      let paymentMessage = 'Order created. Stripe payment setup is waiting for test credentials.'
+      try {
+        await paymentService.create(order.id, `payment-${idempotencyKey}`)
+        paymentMessage = 'Order and PaymentIntent created. Await Stripe webhook confirmation.'
+      } catch (error: unknown) {
+        const status = (error as { response?: { status?: number } }).response?.status
+        if (status === 400 || status === 409 || status === 500) paymentMessage = 'Order created. Stripe is not configured or is unavailable.'
+      }
+      orderPlaced = true
+      activeTab = 'orders'
+      cart = []
+      window.alert(paymentMessage)
+      render()
+    } catch (error: unknown) {
+      const status = (error as { response?: { status?: number } }).response?.status
+      window.alert(status === 401 ? 'Sign in before placing an order.' : 'Unable to create the order. Check your cart and try again.')
+      render()
+    }
+  })
   document.querySelector<HTMLElement>('.admin-toggle')?.addEventListener('click', showAdmin)
   document.querySelector<HTMLElement>('[data-admin-view]')?.addEventListener('click', showAdmin)
   document.querySelector<HTMLElement>('[data-delivery-view]')?.addEventListener('click', showDelivery)
@@ -138,7 +166,7 @@ function bindEvents() {
 }
 
 function showAdminLegacy() {
-  app.innerHTML = `<div class="admin-shell"><header class="admin-top"><div class="brand"><span class="brand-mark">p</span><span>platter <small>OPS</small></span></div><div class="admin-user"><span class="status-dot"></span> All systems operational <span class="avatar">AS</span></div></header><main class="admin-main"><div class="admin-heading"><div><span class="eyebrow">OPERATIONS CENTER <span>✦</span></span><h1>Good morning, <em>Arjun.</em></h1><p>Here is what is happening across Platter today.</p></div><button class="back-btn" id="back-to-app">← Back to app</button></div><div class="stat-grid"><div class="stat-card"><span>ORDERS TODAY</span><strong>1,284</strong><small class="up">↗ 12.8% <i>vs yesterday</i></small></div><div class="stat-card"><span>GROSS SALES</span><strong>$38,420</strong><small class="up">↗ 8.4% <i>vs yesterday</i></small></div><div class="stat-card"><span>AVG. DELIVERY</span><strong>31 <small>min</small></strong><small class="down">↘ 4 min <i>faster this week</i></small></div><div class="stat-card"><span>ACTIVE PROMOS</span><strong>06</strong><small class="neutral">● 2 ending today</small></div></div><div class="admin-columns"><section class="panel"><div class="panel-heading"><div><h2>Live order flow</h2><p>Real-time order activity</p></div><span class="live-pill"><i></i> LIVE</span></div><div class="flow-chart"><div class="chart-labels"><span>1.2k</span><span>900</span><span>600</span><span>300</span><span>0</span></div><div class="chart-lines"></div><svg viewBox="0 0 700 180" preserveAspectRatio="none"><path d="M0,145 C40,135 60,146 95,118 S145,125 180,105 S225,110 260,82 S310,92 345,95 S385,56 430,72 S470,88 505,50 S540,72 580,38 S630,52 700,18"/><path class="area" d="M0,145 C40,135 60,146 95,118 S145,125 180,105 S225,110 260,82 S310,92 345,95 S385,56 430,72 S470,88 505,50 S540,72 580,38 S630,52 700,18 L700,180 L0,180 Z"/></svg></div><div class="chart-days"><span>10 AM</span><span>12 PM</span><span>2 PM</span><span>4 PM</span><span>6 PM</span><span>8 PM</span></div></section><section class="panel promo-panel"><div class="panel-heading"><div><h2>Promo health</h2><p>Campaign performance</p></div><button class="dots">···</button></div><div class="promo-row"><span class="promo-code">FIRSTBITE</span><div><strong>72% redeemed</strong><small>1,240 uses · 6 days left</small></div><span class="promo-dot green"></span></div><div class="promo-row"><span class="promo-code orange">WEEKEND20</span><div><strong>48% redeemed</strong><small>842 uses · 2 days left</small></div><span class="promo-dot yellow"></span></div><div class="promo-row"><span class="promo-code blue">WELCOME</span><div><strong>31% redeemed</strong><small>420 uses · 12 days left</small></div><span class="promo-dot blue-dot"></span></div><button class="manage-btn">Manage promotions <span>→</span></button></section></div></main></div>`
+  app.innerHTML = `<div class="admin-shell"><header class="admin-top"><div class="brand"><span class="brand-mark">p</span><span>platter <small>OPS</small></span></div><div class="admin-user"><span class="status-dot"></span> All systems operational <span class="avatar">AS</span></div></header><main class="admin-main"><div class="admin-heading"><div><span class="eyebrow">OPERATIONS CENTER <span>✦</span></span><h1>Good morning, <em>Arjun.</em></h1><p>Here is what is happening across Platter today.</p></div><button class="back-btn" id="back-to-app">← Back to app</button></div><div class="stat-grid"><div class="stat-card"><span>ORDERS TODAY</span><strong>1,284</strong><small class="up">↗ 12.8% <i>vs yesterday</i></small></div><div class="stat-card"><span>GROSS SALES</span><strong>$38,420</strong><small class="up">↗ 8.4% <i>vs yesterday</i></small></div><div class="stat-card"><span>AVG. DELIVERY</span><strong>31 <small>min</small></strong><small class="down">↘ 4 min <i>faster this week</i></small></div><div class="stat-card"><span>ACTIVE PROMOS</span><strong>06</strong><small class="neutral">● 2 ending today</small></div></div><div class="admin-columns"><section class="panel"><div class="panel-heading"><div><h2>Live order flow</h2><p>Real-time order activity</p></div><span class="live-pill"><i></i> LIVE</span></div><div class="flow-chart"><div class="chart-labels"><span>1.2k</span><span>900</span><span>600</span><span>300</span><span>0</span></div><div class="chart-lines"></div><svg viewBox="0 0 700 180" preserveAspectRatio="none"><path d="M0,145 C40,135 60,146 95,118 S145,125 180,105 S225,110 260,82 S310,92 345,95 S385,56 430,72 S470,88 505,50 S540,72 580,38 S630,52 700,18"/><path class="area" d="M0,145 C40,135 60,146 95,118 S145,125 180,105 S225,110 260,82 S310,92 345,95 S385,56 430,72 S470,88 505,50 S540,72 580,38 S630,52 700,18 L700,180 L0,180 Z"/></div><div class="chart-days"><span>10 AM</span><span>12 PM</span><span>2 PM</span><span>4 PM</span><span>6 PM</span><span>8 PM</span></div></section><section class="panel promo-panel"><div class="panel-heading"><div><h2>Promo health</h2><p>Campaign performance</p></div><button class="dots">···</button></div><div class="promo-row"><span class="promo-code">FIRSTBITE</span><div><strong>72% redeemed</strong><small>1,240 uses · 6 days left</small></div><span class="promo-dot green"></span></div><div class="promo-row"><span class="promo-code orange">WEEKEND20</span><div><strong>48% redeemed</strong><small>842 uses · 2 days left</small></div><span class="promo-dot yellow"></span></div><div class="promo-row"><span class="promo-code blue">WELCOME</span><div><strong>31% redeemed</strong><small>420 uses · 12 days left</small></div><span class="promo-dot blue-dot"></span></div><button class="manage-btn">Manage promotions <span>→</span></button></section></div></main></div>`
   document.querySelector('#back-to-app')?.addEventListener('click', render)
 }
 
@@ -167,8 +195,19 @@ async function showDelivery() {
   document.querySelector('#back-to-app')?.addEventListener('click', render)
   try {
     const deliveries = await deliveryService.list()
-    const cards = deliveries.map((delivery: Delivery) => `<article class="delivery-card"><div><span class="eyebrow">ORDER #${delivery.orderId}</span><h2>${escapeHtml(delivery.deliveryAddress)}</h2><p>${escapeHtml(delivery.status)} · ${new Date(delivery.createdAt).toLocaleString()}</p>${delivery.latitude != null ? `<small>Location ${delivery.latitude.toFixed(4)}, ${delivery.longitude?.toFixed(4)}</small>` : ''}</div><div class="delivery-actions"><button class="quick-add" data-accept-delivery="${delivery.id}" ${delivery.status !== 'ASSIGNED' ? 'disabled' : ''}>Accept</button><select data-delivery-status="${delivery.id}"><option value="">Update status</option>${deliveryTransitions(delivery.status).map((status) => `<option value="${status}">${status}</option>`).join('')}</select><input data-latitude="${delivery.id}" placeholder="Latitude" type="number" step="any"/><input data-longitude="${delivery.id}" placeholder="Longitude" type="number" step="any"/><button class="quick-add" data-location-delivery="${delivery.id}">Update location</button></div></article>`).join('')
-    app.innerHTML = `<div class="admin-shell"><header class="admin-top"><div class="brand"><span class="brand-mark">p</span><span>platter <small>DELIVERY</small></span></div><button class="back-btn" id="back-to-app">← Back to app</button></header><main class="admin-main"><div class="admin-heading"><div><span class="eyebrow">DELIVERY DESK <span>✦</span></span><h1>Your <em>routes.</em></h1><p>Assigned deliveries from the platform.</p></div><button class="back-btn" id="refresh-delivery">Refresh</button></div>${cards || '<div class="review-state">No assigned deliveries.</div>'}</main></div>`
+    const cards = await Promise.all(deliveries.map(async (delivery: Delivery) => {
+      let routeText = '<small>Route unavailable without Google Maps configuration.</small>'
+      try {
+        const route = await deliveryRouteService.get(delivery.orderId)
+        routeText = `<small>${escapeHtml(route.distanceText)} · ${escapeHtml(route.durationText)}</small>`
+      } catch (error: unknown) {
+        const status = (error as { response?: { status?: number } }).response?.status
+        if (status === 403) routeText = '<small>Route access restricted.</small>'
+      }
+      return `<article class="delivery-card"><div><span class="eyebrow">ORDER #${delivery.orderId}</span><h2>${escapeHtml(delivery.deliveryAddress)}</h2><p>${escapeHtml(delivery.status)} · ${new Date(delivery.createdAt).toLocaleString()}</p>${delivery.latitude != null ? `<small>Location ${delivery.latitude.toFixed(4)}, ${delivery.longitude?.toFixed(4)}</small>` : ''}<div class="delivery-route">${routeText}</div></div><div class="delivery-actions"><button class="quick-add" data-accept-delivery="${delivery.id}" ${delivery.status !== 'ASSIGNED' ? 'disabled' : ''}>Accept</button><select data-delivery-status="${delivery.id}"><option value="">Update status</option>${deliveryTransitions(delivery.status).map((status) => `<option value="${status}">${status}</option>`).join('')}</select><input data-latitude="${delivery.id}" placeholder="Latitude" type="number" step="any"/><input data-longitude="${delivery.id}" placeholder="Longitude" type="number" step="any"/><button class="quick-add" data-location-delivery="${delivery.id}">Update location</button></div></article>`
+    }))
+    const cardHtml = cards.join('')
+    app.innerHTML = `<div class="admin-shell"><header class="admin-top"><div class="brand"><span class="brand-mark">p</span><span>platter <small>DELIVERY</small></span></div><button class="back-btn" id="back-to-app">← Back to app</button></header><main class="admin-main"><div class="admin-heading"><div><span class="eyebrow">DELIVERY DESK <span>✦</span></span><h1>Your <em>routes.</em></h1><p>Assigned deliveries from the platform.</p></div><button class="back-btn" id="refresh-delivery">Refresh</button></div>${cardHtml || '<div class="review-state">No assigned deliveries.</div>'}</main></div>`
     document.querySelector('#back-to-app')?.addEventListener('click', render)
     document.querySelector('#refresh-delivery')?.addEventListener('click', () => void showDelivery())
     document.querySelectorAll<HTMLElement>('[data-accept-delivery]').forEach((element) => element.addEventListener('click', async () => { try { await deliveryService.accept(Number(element.dataset.acceptDelivery)); await showDelivery() } catch { window.alert('Unable to accept this delivery.') } }))
